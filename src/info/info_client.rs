@@ -36,10 +36,6 @@ pub enum InfoRequest {
     UserState {
         user: Address,
     },
-    #[serde(rename = "batchClearinghouseStates")]
-    UserStates {
-        users: Vec<Address>,
-    },
     #[serde(rename = "spotClearinghouseState")]
     UserTokenBalances {
         user: Address,
@@ -204,9 +200,17 @@ impl InfoClient {
         self.send_info_request(input).await
     }
 
+    /// Fetches clearinghouse state for multiple users.
+    ///
+    /// Hyperliquid's public `/info` API does not currently expose a server-side
+    /// batch clearinghouse endpoint, so this helper calls `clearinghouseState`
+    /// once per address and returns responses in request order.
     pub async fn user_states(&self, addresses: Vec<Address>) -> Result<Vec<UserStateResponse>> {
-        let input = InfoRequest::UserStates { users: addresses };
-        self.send_info_request(input).await
+        let mut states = Vec::with_capacity(addresses.len());
+        for address in addresses {
+            states.push(self.user_state(address).await?);
+        }
+        Ok(states)
     }
 
     pub async fn user_token_balances(&self, address: Address) -> Result<UserTokenBalanceResponse> {
@@ -355,5 +359,15 @@ mod tests {
     fn serializes_perp_dexs_request() {
         let json = serde_json::to_value(InfoRequest::PerpDexs).unwrap();
         assert_eq!(json, serde_json::json!({ "type": "perpDexs" }));
+    }
+
+    #[test]
+    fn clearinghouse_state_serializes_single_user_request() {
+        for user in [Address::ZERO, Address::from([1u8; 20])] {
+            let json = serde_json::to_value(InfoRequest::UserState { user }).unwrap();
+            assert_eq!(json["type"], "clearinghouseState");
+            assert_eq!(json["user"], serde_json::to_value(user).unwrap());
+            assert!(json.get("users").is_none());
+        }
     }
 }
