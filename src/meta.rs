@@ -1,20 +1,20 @@
 use std::collections::HashMap;
 
 use alloy::primitives::B128;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Meta {
     pub universe: Vec<AssetMeta>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PerpDex {
     pub name: String,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct SpotMeta {
     pub universe: Vec<SpotAssetMeta>,
     pub tokens: Vec<TokenInfo>,
@@ -51,21 +51,21 @@ impl SpotMeta {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum SpotMetaAndAssetCtxs {
     SpotMeta(SpotMeta),
     Context(Vec<SpotAssetContext>),
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum MetaAndAssetCtxs {
     Meta(Meta),
     Context(Vec<AssetContext>),
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SpotAssetContext {
     pub day_ntl_vlm: String,
@@ -76,7 +76,7 @@ pub struct SpotAssetContext {
     pub coin: String,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetContext {
     pub day_ntl_vlm: String,
@@ -90,7 +90,7 @@ pub struct AssetContext {
     pub prev_day_px: String,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetMeta {
     pub name: String,
@@ -100,7 +100,7 @@ pub struct AssetMeta {
     pub only_isolated: Option<bool>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SpotAssetMeta {
     pub tokens: [usize; 2],
@@ -109,7 +109,7 @@ pub struct SpotAssetMeta {
     pub is_canonical: bool,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenInfo {
     pub name: String,

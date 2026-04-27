@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use alloy::primitives::Address;
 
@@ -8,7 +8,7 @@ use crate::{
     UserTokenBalance,
 };
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UserStateResponse {
     pub asset_positions: Vec<AssetPosition>,
@@ -17,12 +17,12 @@ pub struct UserStateResponse {
     pub withdrawable: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct UserTokenBalanceResponse {
     pub balances: Vec<UserTokenBalance>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UserFeesResponse {
     pub active_referral_discount: String,
@@ -32,7 +32,7 @@ pub struct UserFeesResponse {
     pub user_cross_rate: String,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenOrdersResponse {
     pub coin: String,
@@ -44,7 +44,7 @@ pub struct OpenOrdersResponse {
     pub cloid: Option<String>,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UserFillsResponse {
     pub closed_pnl: String,
@@ -64,7 +64,7 @@ pub struct UserFillsResponse {
     pub twap_id: Option<u64>,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FundingHistoryResponse {
     pub coin: String,
@@ -73,14 +73,14 @@ pub struct FundingHistoryResponse {
     pub time: u64,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct UserFundingResponse {
     pub time: u64,
     pub hash: String,
     pub delta: Delta,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct L2SnapshotResponse {
     pub coin: String,
@@ -88,7 +88,7 @@ pub struct L2SnapshotResponse {
     pub time: u64,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentTradesResponse {
     pub coin: String,
@@ -99,7 +99,7 @@ pub struct RecentTradesResponse {
     pub hash: String,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct CandlesSnapshotResponse {
     #[serde(rename = "t")]
     pub time_open: u64,
@@ -123,7 +123,7 @@ pub struct CandlesSnapshotResponse {
     pub num_trades: u64,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct OrderStatusResponse {
     pub status: String,
     /// `None` if the order is not found
@@ -131,7 +131,7 @@ pub struct OrderStatusResponse {
     pub order: Option<OrderInfo>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ReferralResponse {
     pub referred_by: Option<Referrer>,
@@ -141,7 +141,7 @@ pub struct ReferralResponse {
     pub referrer_state: ReferrerState,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ActiveAssetDataResponse {
     pub user: Address,
