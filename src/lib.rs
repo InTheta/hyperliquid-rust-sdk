@@ -6,6 +6,7 @@ mod exchange;
 mod helpers;
 mod info;
 mod market_maker;
+mod market_meta_store;
 mod meta;
 mod prelude;
 mod req;
@@ -18,5 +19,8 @@ pub use exchange::*;
 pub use helpers::{bps_diff, truncate_float, BaseUrl};
 pub use info::{info_client::*, *};
 pub use market_maker::{MarketMaker, MarketMakerInput, MarketMakerRestingOrder};
-pub use meta::{AssetContext, AssetMeta, Meta, MetaAndAssetCtxs, SpotAssetMeta, SpotMeta};
+pub use market_meta_store::{
+    MarketMetaStore, MarketMetaStoreData, MarketMetaStoreDexs, MarketMetaStoreOptions,
+};
+pub use meta::{AssetContext, AssetMeta, Meta, MetaAndAssetCtxs, PerpDex, SpotAssetMeta, SpotMeta};
 pub use ws::*;

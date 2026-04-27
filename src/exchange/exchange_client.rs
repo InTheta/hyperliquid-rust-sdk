@@ -22,6 +22,7 @@ use crate::{
     },
     helpers::{next_nonce, uuid_to_hex_string},
     info::info_client::InfoClient,
+    market_meta_store::MarketMetaStore,
     meta::Meta,
     prelude::*,
     req::HttpClient,
@@ -110,22 +111,16 @@ impl ExchangeClient {
         let client = client.unwrap_or_default();
         let base_url = base_url.unwrap_or(BaseUrl::Mainnet);
 
-        let info = InfoClient::new(None, Some(base_url)).await?;
+        let info = InfoClient::new(Some(client.clone()), Some(base_url)).await?;
         let meta = if let Some(meta) = meta {
             meta
         } else {
             info.meta().await?
         };
 
-        let mut coin_to_asset = HashMap::new();
-        for (asset_ind, asset) in meta.universe.iter().enumerate() {
-            coin_to_asset.insert(asset.name.clone(), asset_ind as u32);
-        }
-
-        coin_to_asset = info
-            .spot_meta()
-            .await?
-            .add_pair_and_name_to_index_map(coin_to_asset);
+        let spot_meta = info.spot_meta().await?;
+        let market_meta_data = MarketMetaStore::build_data(&meta, &spot_meta, &[]);
+        let coin_to_asset = market_meta_data.coin_to_asset.clone();
 
         Ok(ExchangeClient {
             wallet,
@@ -137,6 +132,17 @@ impl ExchangeClient {
             },
             coin_to_asset,
         })
+    }
+
+    fn asset_id(&self, coin: &str) -> Result<u32> {
+        self.coin_to_asset
+            .get(coin)
+            .copied()
+            .ok_or(Error::AssetNotFound)
+    }
+
+    fn conversion_map(&self) -> HashMap<String, u32> {
+        self.coin_to_asset.clone()
     }
 
     async fn post(
@@ -420,28 +426,28 @@ impl ExchangeClient {
             _ => return Err(Error::GenericRequest("Invalid base URL".to_string())),
         };
         let info_client = InfoClient::new(None, Some(base_url)).await?;
-        let meta = info_client.meta().await?;
-
-        let asset_meta = meta
-            .universe
-            .iter()
-            .find(|a| a.name == asset)
+        let spot_meta = info_client.spot_meta().await?;
+        let market_meta_data = MarketMetaStore::build_data(&self.meta, &spot_meta, &[]);
+        let market_meta_store = MarketMetaStore::from_data(market_meta_data);
+        let asset_id = market_meta_store
+            .asset_id(asset)
+            .or_else(|| self.coin_to_asset.get(asset).copied())
             .ok_or(Error::AssetNotFound)?;
-
-        let sz_decimals = asset_meta.sz_decimals;
-        let max_decimals: u32 = if self.coin_to_asset[asset] < 10000 {
-            6
-        } else {
-            8
-        };
+        let sz_decimals = market_meta_store
+            .sz_decimals(asset)
+            .ok_or(Error::AssetNotFound)?;
+        let max_decimals: u32 = if asset_id < 10000 { 6 } else { 8 };
         let price_decimals = max_decimals.saturating_sub(sz_decimals);
 
         let px = if let Some(px) = px {
             px
         } else {
             let all_mids = info_client.all_mids().await?;
+            let mid_key = market_meta_store
+                .mid_key(asset)
+                .unwrap_or_else(|| asset.to_string());
             all_mids
-                .get(asset)
+                .get(&mid_key)
                 .ok_or(Error::AssetNotFound)?
                 .parse::<f64>()
                 .map_err(|_| Error::FloatStringParse)?
@@ -488,10 +494,11 @@ impl ExchangeClient {
         let wallet = wallet.unwrap_or(&self.wallet);
         let timestamp = next_nonce();
 
+        let coin_to_asset = self.conversion_map();
         let mut transformed_orders = Vec::new();
 
         for order in orders {
-            transformed_orders.push(order.convert(&self.coin_to_asset)?);
+            transformed_orders.push(order.convert(&coin_to_asset)?);
         }
 
         let action = Actions::Order(BulkOrder {
@@ -518,10 +525,11 @@ impl ExchangeClient {
 
         builder.builder = builder.builder.to_lowercase();
 
+        let coin_to_asset = self.conversion_map();
         let mut transformed_orders = Vec::new();
 
         for order in orders {
-            transformed_orders.push(order.convert(&self.coin_to_asset)?);
+            transformed_orders.push(order.convert(&coin_to_asset)?);
         }
 
         let action = Actions::Order(BulkOrder {
@@ -555,10 +563,7 @@ impl ExchangeClient {
 
         let mut transformed_cancels = Vec::new();
         for cancel in cancels.into_iter() {
-            let &asset = self
-                .coin_to_asset
-                .get(&cancel.asset)
-                .ok_or(Error::AssetNotFound)?;
+            let asset = self.asset_id(&cancel.asset)?;
             transformed_cancels.push(CancelRequest {
                 asset,
                 oid: cancel.oid,
@@ -593,11 +598,12 @@ impl ExchangeClient {
         let wallet = wallet.unwrap_or(&self.wallet);
         let timestamp = next_nonce();
 
+        let coin_to_asset = self.conversion_map();
         let mut transformed_modifies = Vec::new();
         for modify in modifies.into_iter() {
             transformed_modifies.push(ModifyRequest {
                 oid: modify.oid,
-                order: modify.order.convert(&self.coin_to_asset)?,
+                order: modify.order.convert(&coin_to_asset)?,
             });
         }
 
@@ -631,10 +637,7 @@ impl ExchangeClient {
 
         let mut transformed_cancels: Vec<CancelRequestCloid> = Vec::new();
         for cancel in cancels.into_iter() {
-            let &asset = self
-                .coin_to_asset
-                .get(&cancel.asset)
-                .ok_or(Error::AssetNotFound)?;
+            let asset = self.asset_id(&cancel.asset)?;
             transformed_cancels.push(CancelRequestCloid {
                 asset,
                 cloid: uuid_to_hex_string(cancel.cloid),
@@ -664,7 +667,7 @@ impl ExchangeClient {
 
         let timestamp = next_nonce();
 
-        let &asset_index = self.coin_to_asset.get(coin).ok_or(Error::AssetNotFound)?;
+        let asset_index = self.asset_id(coin)?;
         let action = Actions::UpdateLeverage(UpdateLeverage {
             asset: asset_index,
             is_cross,
@@ -689,7 +692,7 @@ impl ExchangeClient {
         let amount = (amount * 1_000_000.0).round() as i64;
         let timestamp = next_nonce();
 
-        let &asset_index = self.coin_to_asset.get(coin).ok_or(Error::AssetNotFound)?;
+        let asset_index = self.asset_id(coin)?;
         let action = Actions::UpdateIsolatedMargin(UpdateIsolatedMargin {
             asset: asset_index,
             is_buy: true,
@@ -884,13 +887,14 @@ fn round_to_significant_and_decimal(value: f64, sig_figs: u32, max_decimals: u32
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::{collections::HashMap, str::FromStr};
 
     use alloy::primitives::address;
 
     use super::*;
     use crate::{
         exchange::order::{Limit, OrderRequest, Trigger},
+        exchange::{cancel::ClientCancelRequest, modify::ClientModifyRequest},
         Order,
     };
 
@@ -1161,6 +1165,72 @@ mod tests {
         let vault_signature = sign_typed_data(&vault_send, &wallet)?;
         // Verify vault signature is different from non-vault signature
         assert_ne!(mainnet_signature, vault_signature);
+
+        Ok(())
+    }
+
+    fn test_exchange_client(coin_to_asset: HashMap<String, u32>) -> Result<ExchangeClient> {
+        let wallet = get_wallet()?;
+        Ok(ExchangeClient {
+            http_client: HttpClient {
+                client: Client::new(),
+                base_url: BaseUrl::Mainnet.get_url(),
+            },
+            wallet,
+            meta: Meta { universe: vec![] },
+            vault_address: None,
+            coin_to_asset,
+        })
+    }
+
+    #[test]
+    fn exchange_client_conversion_uses_market_meta_store() -> Result<()> {
+        let coin_to_asset = HashMap::from([
+            ("BTC".to_string(), 0),
+            ("HYPE/USDC".to_string(), 10107),
+            ("@107".to_string(), 10107),
+            ("dexA:AAA".to_string(), 110000),
+        ]);
+        let client = test_exchange_client(coin_to_asset)?;
+
+        let order = ClientOrderRequest {
+            asset: "HYPE/USDC".to_string(),
+            is_buy: true,
+            reduce_only: false,
+            limit_px: 1.25,
+            sz: 2.0,
+            cloid: None,
+            order_type: ClientOrder::Limit(ClientLimit {
+                tif: "Gtc".to_string(),
+            }),
+        }
+        .convert(&client.conversion_map())?;
+        assert_eq!(order.asset, 10107);
+
+        let modify = ClientModifyRequest {
+            oid: 7,
+            order: ClientOrderRequest {
+                asset: "dexA:AAA".to_string(),
+                is_buy: false,
+                reduce_only: false,
+                limit_px: 2.0,
+                sz: 3.0,
+                cloid: None,
+                order_type: ClientOrder::Limit(ClientLimit {
+                    tif: "Alo".to_string(),
+                }),
+            },
+        };
+        assert_eq!(
+            modify.order.convert(&client.conversion_map())?.asset,
+            110000
+        );
+
+        let cancel = ClientCancelRequest {
+            asset: "@107".to_string(),
+            oid: 42,
+        };
+        assert_eq!(client.asset_id(&cancel.asset)?, 10107);
 
         Ok(())
     }

@@ -9,6 +9,12 @@ pub struct Meta {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PerpDex {
+    pub name: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct SpotMeta {
     pub universe: Vec<SpotAssetMeta>,
     pub tokens: Vec<TokenInfo>,

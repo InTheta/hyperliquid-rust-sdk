@@ -11,7 +11,7 @@ use crate::{
         L2SnapshotResponse, OpenOrdersResponse, OrderInfo, RecentTradesResponse, UserFillsResponse,
         UserStateResponse,
     },
-    meta::{AssetContext, Meta, SpotMeta, SpotMetaAndAssetCtxs},
+    meta::{AssetContext, Meta, PerpDex, SpotMeta, SpotMetaAndAssetCtxs},
     prelude::*,
     req::HttpClient,
     ws::{Subscription, WsManager},
@@ -58,6 +58,7 @@ pub enum InfoRequest {
     MetaAndAssetCtxs,
     SpotMeta,
     SpotMetaAndAssetCtxs,
+    PerpDexs,
     AllMids,
     UserFills {
         user: Address,
@@ -182,6 +183,17 @@ impl InfoClient {
         serde_json::from_str(&return_data).map_err(|e| Error::JsonParse(e.to_string()))
     }
 
+    async fn send_info_value<T: for<'a> Deserialize<'a>>(
+        &self,
+        info_request: serde_json::Value,
+    ) -> Result<T> {
+        let data =
+            serde_json::to_string(&info_request).map_err(|e| Error::JsonParse(e.to_string()))?;
+
+        let return_data = self.http_client.post("/info", data).await?;
+        serde_json::from_str(&return_data).map_err(|e| Error::JsonParse(e.to_string()))
+    }
+
     pub async fn open_orders(&self, address: Address) -> Result<Vec<OpenOrdersResponse>> {
         let input = InfoRequest::OpenOrders { user: address };
         self.send_info_request(input).await
@@ -209,6 +221,19 @@ impl InfoClient {
 
     pub async fn meta(&self) -> Result<Meta> {
         let input = InfoRequest::Meta;
+        self.send_info_request(input).await
+    }
+
+    pub async fn meta_for_dex(&self, dex: String) -> Result<Meta> {
+        self.send_info_value(serde_json::json!({
+            "type": "meta",
+            "dex": dex,
+        }))
+        .await
+    }
+
+    pub async fn perp_dexs(&self) -> Result<Vec<Option<PerpDex>>> {
+        let input = InfoRequest::PerpDexs;
         self.send_info_request(input).await
     }
 
@@ -319,5 +344,16 @@ impl InfoClient {
     ) -> Result<ActiveAssetDataResponse> {
         let input = InfoRequest::ActiveAssetData { user, coin };
         self.send_info_request(input).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serializes_perp_dexs_request() {
+        let json = serde_json::to_value(InfoRequest::PerpDexs).unwrap();
+        assert_eq!(json, serde_json::json!({ "type": "perpDexs" }));
     }
 }
