@@ -22,7 +22,7 @@ use crate::{
     },
     helpers::{next_nonce, uuid_to_hex_string},
     info::info_client::InfoClient,
-    market_meta_store::MarketMetaStore,
+    market_meta_store::{resolve_outcome_asset_id_from_identifier, MarketMetaStore},
     meta::Meta,
     prelude::*,
     req::HttpClient,
@@ -138,6 +138,7 @@ impl ExchangeClient {
         self.coin_to_asset
             .get(coin)
             .copied()
+            .or_else(|| resolve_outcome_asset_id_from_identifier(coin))
             .ok_or(Error::AssetNotFound)
     }
 
@@ -1207,6 +1208,34 @@ mod tests {
         .convert(&client.conversion_map())?;
         assert_eq!(order.asset, 10107);
 
+        let outcome_order = ClientOrderRequest {
+            asset: "#20".to_string(),
+            is_buy: true,
+            reduce_only: false,
+            limit_px: 0.61,
+            sz: 1.0,
+            cloid: None,
+            order_type: ClientOrder::Limit(ClientLimit {
+                tif: "Gtc".to_string(),
+            }),
+        }
+        .convert(&client.conversion_map())?;
+        assert_eq!(outcome_order.asset, 100000020);
+
+        let outcome_order_by_asset_id = ClientOrderRequest {
+            asset: "100000020".to_string(),
+            is_buy: true,
+            reduce_only: false,
+            limit_px: 0.61,
+            sz: 1.0,
+            cloid: None,
+            order_type: ClientOrder::Limit(ClientLimit {
+                tif: "Gtc".to_string(),
+            }),
+        }
+        .convert(&client.conversion_map())?;
+        assert_eq!(outcome_order_by_asset_id.asset, 100000020);
+
         let modify = ClientModifyRequest {
             oid: 7,
             order: ClientOrderRequest {
@@ -1231,6 +1260,8 @@ mod tests {
             oid: 42,
         };
         assert_eq!(client.asset_id(&cancel.asset)?, 10107);
+        assert_eq!(client.asset_id("#21")?, 100000021);
+        assert_eq!(client.asset_id("100000021")?, 100000021);
 
         Ok(())
     }

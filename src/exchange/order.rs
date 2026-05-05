@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::{
     errors::Error,
     helpers::{float_to_string_for_hashing, uuid_to_hex_string},
+    market_meta_store::resolve_outcome_asset_id_from_identifier,
     prelude::*,
 };
 
@@ -109,7 +110,11 @@ impl ClientOrderRequest {
                 tpsl: trigger.tpsl,
             }),
         };
-        let &asset = coin_to_asset.get(&self.asset).ok_or(Error::AssetNotFound)?;
+        let asset = coin_to_asset
+            .get(&self.asset)
+            .copied()
+            .or_else(|| resolve_outcome_asset_id_from_identifier(&self.asset))
+            .ok_or(Error::AssetNotFound)?;
 
         let cloid = self.cloid.map(uuid_to_hex_string);
 

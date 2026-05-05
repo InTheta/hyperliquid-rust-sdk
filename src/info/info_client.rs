@@ -8,8 +8,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     info::{
         ActiveAssetDataResponse, CandlesSnapshotResponse, FundingHistoryResponse,
-        L2SnapshotResponse, OpenOrdersResponse, OrderInfo, RecentTradesResponse, UserFillsResponse,
-        UserStateResponse,
+        L2SnapshotResponse, OpenOrdersResponse, OrderInfo, OutcomeMetaResponse,
+        RecentTradesResponse, UserFillsResponse, UserStateResponse,
     },
     meta::{AssetContext, Meta, PerpDex, SpotMeta, SpotMetaAndAssetCtxs},
     prelude::*,
@@ -54,6 +54,7 @@ pub enum InfoRequest {
     MetaAndAssetCtxs,
     SpotMeta,
     SpotMetaAndAssetCtxs,
+    OutcomeMeta,
     PerpDexs,
     AllMids,
     UserFills {
@@ -256,6 +257,11 @@ impl InfoClient {
         self.send_info_request(input).await
     }
 
+    pub async fn outcome_meta(&self) -> Result<OutcomeMetaResponse> {
+        let input = InfoRequest::OutcomeMeta;
+        self.send_info_request(input).await
+    }
+
     pub async fn all_mids(&self) -> Result<HashMap<String, String>> {
         let input = InfoRequest::AllMids;
         self.send_info_request(input).await
@@ -359,6 +365,40 @@ mod tests {
     fn serializes_perp_dexs_request() {
         let json = serde_json::to_value(InfoRequest::PerpDexs).unwrap();
         assert_eq!(json, serde_json::json!({ "type": "perpDexs" }));
+    }
+
+    #[test]
+    fn serializes_outcome_meta_request() {
+        let json = serde_json::to_value(InfoRequest::OutcomeMeta).unwrap();
+        assert_eq!(json, serde_json::json!({ "type": "outcomeMeta" }));
+    }
+
+    #[test]
+    fn deserializes_outcome_meta_response() {
+        let payload = serde_json::json!({
+            "outcomes": [{
+                "outcome": 2,
+                "name": "Recurring",
+                "description": "class:priceBinary|underlying:BTC",
+                "sideSpecs": [
+                    { "name": "Yes", "token": 20 },
+                    { "name": "No" }
+                ]
+            }],
+            "questions": [{
+                "question": 7,
+                "name": "BTC daily",
+                "description": "question",
+                "fallbackOutcome": 2,
+                "namedOutcomes": [2],
+                "settledNamedOutcomes": []
+            }]
+        });
+        let meta: OutcomeMetaResponse = serde_json::from_value(payload).unwrap();
+        assert_eq!(meta.outcomes[0].outcome, 2);
+        assert_eq!(meta.outcomes[0].side_specs[0].token, Some(20));
+        assert_eq!(meta.outcomes[0].side_specs[1].token, None);
+        assert_eq!(meta.questions[0].fallback_outcome, 2);
     }
 
     #[test]

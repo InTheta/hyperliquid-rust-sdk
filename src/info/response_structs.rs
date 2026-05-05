@@ -151,3 +151,38 @@ pub struct ActiveAssetDataResponse {
     pub available_to_trade: Vec<String>,
     pub mark_px: String,
 }
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OutcomeMetaResponse {
+    pub outcomes: Vec<OutcomeMetaOutcome>,
+    #[serde(default)]
+    pub questions: Vec<OutcomeQuestion>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OutcomeMetaOutcome {
+    pub outcome: u32,
+    pub name: String,
+    pub description: String,
+    pub side_specs: Vec<OutcomeSideSpec>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OutcomeSideSpec {
+    pub name: String,
+    pub token: Option<u32>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OutcomeQuestion {
+    pub question: u32,
+    pub name: String,
+    pub description: String,
+    pub fallback_outcome: u32,
+    pub named_outcomes: Vec<u32>,
+    pub settled_named_outcomes: Vec<u32>,
+}
