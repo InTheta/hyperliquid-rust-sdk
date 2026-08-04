@@ -487,6 +487,17 @@ impl ExchangeClient {
             .await
     }
 
+    pub async fn order_with_builder_with_nonce(
+        &self,
+        order: ClientOrderRequest,
+        wallet: Option<&PrivateKeySigner>,
+        builder: BuilderInfo,
+        nonce: u64,
+    ) -> Result<ExchangeResponseStatus> {
+        self.bulk_order_with_builder_with_nonce(vec![order], wallet, builder, nonce)
+            .await
+    }
+
     pub async fn bulk_order(
         &self,
         orders: Vec<ClientOrderRequest>,
@@ -519,10 +530,22 @@ impl ExchangeClient {
         &self,
         orders: Vec<ClientOrderRequest>,
         wallet: Option<&PrivateKeySigner>,
+        builder: BuilderInfo,
+    ) -> Result<ExchangeResponseStatus> {
+        let timestamp = next_nonce();
+
+        self.bulk_order_with_builder_with_nonce(orders, wallet, builder, timestamp)
+            .await
+    }
+
+    pub async fn bulk_order_with_builder_with_nonce(
+        &self,
+        orders: Vec<ClientOrderRequest>,
+        wallet: Option<&PrivateKeySigner>,
         mut builder: BuilderInfo,
+        nonce: u64,
     ) -> Result<ExchangeResponseStatus> {
         let wallet = wallet.unwrap_or(&self.wallet);
-        let timestamp = next_nonce();
 
         builder.builder = builder.builder.to_lowercase();
 
@@ -538,12 +561,12 @@ impl ExchangeClient {
             grouping: "na".to_string(),
             builder: Some(builder),
         });
-        let connection_id = action.hash(timestamp, self.vault_address)?;
+        let connection_id = action.hash(nonce, self.vault_address)?;
         let action = serde_json::to_value(&action).map_err(|e| Error::JsonParse(e.to_string()))?;
 
         let is_mainnet = self.http_client.is_mainnet();
         let signature = sign_l1_action(wallet, connection_id, is_mainnet)?;
-        self.post(action, signature, timestamp).await
+        self.post(action, signature, nonce).await
     }
 
     pub async fn cancel(
@@ -554,13 +577,34 @@ impl ExchangeClient {
         self.bulk_cancel(vec![cancel], wallet).await
     }
 
+    pub async fn cancel_with_nonce(
+        &self,
+        cancel: ClientCancelRequest,
+        wallet: Option<&PrivateKeySigner>,
+        nonce: u64,
+    ) -> Result<ExchangeResponseStatus> {
+        self.bulk_cancel_with_nonce(vec![cancel], wallet, nonce)
+            .await
+    }
+
     pub async fn bulk_cancel(
         &self,
         cancels: Vec<ClientCancelRequest>,
         wallet: Option<&PrivateKeySigner>,
     ) -> Result<ExchangeResponseStatus> {
-        let wallet = wallet.unwrap_or(&self.wallet);
         let timestamp = next_nonce();
+
+        self.bulk_cancel_with_nonce(cancels, wallet, timestamp)
+            .await
+    }
+
+    pub async fn bulk_cancel_with_nonce(
+        &self,
+        cancels: Vec<ClientCancelRequest>,
+        wallet: Option<&PrivateKeySigner>,
+        nonce: u64,
+    ) -> Result<ExchangeResponseStatus> {
+        let wallet = wallet.unwrap_or(&self.wallet);
 
         let mut transformed_cancels = Vec::new();
         for cancel in cancels.into_iter() {
@@ -574,13 +618,13 @@ impl ExchangeClient {
         let action = Actions::Cancel(BulkCancel {
             cancels: transformed_cancels,
         });
-        let connection_id = action.hash(timestamp, self.vault_address)?;
+        let connection_id = action.hash(nonce, self.vault_address)?;
 
         let action = serde_json::to_value(&action).map_err(|e| Error::JsonParse(e.to_string()))?;
         let is_mainnet = self.http_client.is_mainnet();
         let signature = sign_l1_action(wallet, connection_id, is_mainnet)?;
 
-        self.post(action, signature, timestamp).await
+        self.post(action, signature, nonce).await
     }
 
     pub async fn modify(
@@ -628,13 +672,34 @@ impl ExchangeClient {
         self.bulk_cancel_by_cloid(vec![cancel], wallet).await
     }
 
+    pub async fn cancel_by_cloid_with_nonce(
+        &self,
+        cancel: ClientCancelRequestCloid,
+        wallet: Option<&PrivateKeySigner>,
+        nonce: u64,
+    ) -> Result<ExchangeResponseStatus> {
+        self.bulk_cancel_by_cloid_with_nonce(vec![cancel], wallet, nonce)
+            .await
+    }
+
     pub async fn bulk_cancel_by_cloid(
         &self,
         cancels: Vec<ClientCancelRequestCloid>,
         wallet: Option<&PrivateKeySigner>,
     ) -> Result<ExchangeResponseStatus> {
-        let wallet = wallet.unwrap_or(&self.wallet);
         let timestamp = next_nonce();
+
+        self.bulk_cancel_by_cloid_with_nonce(cancels, wallet, timestamp)
+            .await
+    }
+
+    pub async fn bulk_cancel_by_cloid_with_nonce(
+        &self,
+        cancels: Vec<ClientCancelRequestCloid>,
+        wallet: Option<&PrivateKeySigner>,
+        nonce: u64,
+    ) -> Result<ExchangeResponseStatus> {
+        let wallet = wallet.unwrap_or(&self.wallet);
 
         let mut transformed_cancels: Vec<CancelRequestCloid> = Vec::new();
         for cancel in cancels.into_iter() {
@@ -649,12 +714,12 @@ impl ExchangeClient {
             cancels: transformed_cancels,
         });
 
-        let connection_id = action.hash(timestamp, self.vault_address)?;
+        let connection_id = action.hash(nonce, self.vault_address)?;
         let action = serde_json::to_value(&action).map_err(|e| Error::JsonParse(e.to_string()))?;
         let is_mainnet = self.http_client.is_mainnet();
         let signature = sign_l1_action(wallet, connection_id, is_mainnet)?;
 
-        self.post(action, signature, timestamp).await
+        self.post(action, signature, nonce).await
     }
 
     pub async fn update_leverage(
@@ -664,9 +729,21 @@ impl ExchangeClient {
         is_cross: bool,
         wallet: Option<&PrivateKeySigner>,
     ) -> Result<ExchangeResponseStatus> {
-        let wallet = wallet.unwrap_or(&self.wallet);
-
         let timestamp = next_nonce();
+
+        self.update_leverage_with_nonce(leverage, coin, is_cross, wallet, timestamp)
+            .await
+    }
+
+    pub async fn update_leverage_with_nonce(
+        &self,
+        leverage: u32,
+        coin: &str,
+        is_cross: bool,
+        wallet: Option<&PrivateKeySigner>,
+        nonce: u64,
+    ) -> Result<ExchangeResponseStatus> {
+        let wallet = wallet.unwrap_or(&self.wallet);
 
         let asset_index = self.asset_id(coin)?;
         let action = Actions::UpdateLeverage(UpdateLeverage {
@@ -674,12 +751,12 @@ impl ExchangeClient {
             is_cross,
             leverage,
         });
-        let connection_id = action.hash(timestamp, self.vault_address)?;
+        let connection_id = action.hash(nonce, self.vault_address)?;
         let action = serde_json::to_value(&action).map_err(|e| Error::JsonParse(e.to_string()))?;
         let is_mainnet = self.http_client.is_mainnet();
         let signature = sign_l1_action(wallet, connection_id, is_mainnet)?;
 
-        self.post(action, signature, timestamp).await
+        self.post(action, signature, nonce).await
     }
 
     pub async fn update_isolated_margin(
@@ -688,10 +765,22 @@ impl ExchangeClient {
         coin: &str,
         wallet: Option<&PrivateKeySigner>,
     ) -> Result<ExchangeResponseStatus> {
+        let timestamp = next_nonce();
+
+        self.update_isolated_margin_with_nonce(amount, coin, wallet, timestamp)
+            .await
+    }
+
+    pub async fn update_isolated_margin_with_nonce(
+        &self,
+        amount: f64,
+        coin: &str,
+        wallet: Option<&PrivateKeySigner>,
+        nonce: u64,
+    ) -> Result<ExchangeResponseStatus> {
         let wallet = wallet.unwrap_or(&self.wallet);
 
         let amount = (amount * 1_000_000.0).round() as i64;
-        let timestamp = next_nonce();
 
         let asset_index = self.asset_id(coin)?;
         let action = Actions::UpdateIsolatedMargin(UpdateIsolatedMargin {
@@ -699,12 +788,12 @@ impl ExchangeClient {
             is_buy: true,
             ntli: amount,
         });
-        let connection_id = action.hash(timestamp, self.vault_address)?;
+        let connection_id = action.hash(nonce, self.vault_address)?;
         let action = serde_json::to_value(&action).map_err(|e| Error::JsonParse(e.to_string()))?;
         let is_mainnet = self.http_client.is_mainnet();
         let signature = sign_l1_action(wallet, connection_id, is_mainnet)?;
 
-        self.post(action, signature, timestamp).await
+        self.post(action, signature, nonce).await
     }
 
     pub async fn approve_agent(
@@ -844,16 +933,27 @@ impl ExchangeClient {
         time: Option<u64>,
         wallet: Option<&PrivateKeySigner>,
     ) -> Result<ExchangeResponseStatus> {
-        let wallet = wallet.unwrap_or(&self.wallet);
         let timestamp = next_nonce();
 
+        self.schedule_cancel_with_nonce(time, wallet, timestamp)
+            .await
+    }
+
+    pub async fn schedule_cancel_with_nonce(
+        &self,
+        time: Option<u64>,
+        wallet: Option<&PrivateKeySigner>,
+        nonce: u64,
+    ) -> Result<ExchangeResponseStatus> {
+        let wallet = wallet.unwrap_or(&self.wallet);
+
         let action = Actions::ScheduleCancel(ScheduleCancel { time });
-        let connection_id = action.hash(timestamp, self.vault_address)?;
+        let connection_id = action.hash(nonce, self.vault_address)?;
         let action = serde_json::to_value(&action).map_err(|e| Error::JsonParse(e.to_string()))?;
         let is_mainnet = self.http_client.is_mainnet();
         let signature = sign_l1_action(wallet, connection_id, is_mainnet)?;
 
-        self.post(action, signature, timestamp).await
+        self.post(action, signature, nonce).await
     }
 
     pub async fn claim_rewards(
